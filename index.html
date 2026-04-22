@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>便當訂餐系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .hidden-section { display: none; }
+        input[type="number"] { width: 60px; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <nav class="bg-blue-600 text-white p-4 sticky top-0 z-50 flex justify-between">
+        <h1 class="font-bold">訂餐系統</h1>
+        <button onclick="toggleView()" id="viewToggleBtn" class="bg-blue-700 px-3 py-1 rounded text-sm">進入後台</button>
+    </nav>
+
+    <section id="customerView" class="p-4">
+        <div class="bg-white rounded-lg shadow p-4 mb-6">
+            <h2 class="text-xl font-bold mb-4 border-b pb-2">點餐人資訊</h2>
+            <div class="space-y-3">
+                <input type="text" id="custName" placeholder="姓名" class="w-full border p-2 rounded">
+                <input type="tel" id="custPhone" placeholder="聯絡電話" class="w-full border p-2 rounded">
+                <select id="deliveryType" class="w-full border p-2 rounded">
+                    <option value="自取">自取</option>
+                    <option value="外送">外送</option>
+                </select>
+                <textarea id="custNote" placeholder="備註（如：少飯、不加蔥）" class="w-full border p-2 rounded"></textarea>
+            </div>
+        </div>
+
+        <div id="menuContainer" class="space-y-4">
+            </div>
+
+        <div class="mt-6 bg-white p-4 rounded-lg shadow sticky bottom-4">
+            <div class="text-xl font-bold text-red-600 mb-2">總計金額：$<span id="totalAmount">0</span></div>
+            <button onclick="submitOrder()" class="w-full bg-green-500 text-white py-3 rounded-lg font-bold text-lg">確認送出訂單</button>
+        </div>
+    </section>
+
+    <section id="adminView" class="p-4 hidden-section">
+        <div class="bg-white rounded-lg shadow p-4 mb-6">
+            <h2 class="text-xl font-bold mb-4">品項設定</h2>
+            <div class="grid grid-cols-2 gap-2 mb-4">
+                <input type="text" id="newCategory" placeholder="大項目(如:特餐)" class="border p-2 rounded">
+                <input type="text" id="newItemName" placeholder="品名" class="border p-2 rounded">
+                <input type="number" id="newItemPrice" placeholder="價格" class="border p-2 rounded">
+                <button onclick="addItem()" class="bg-blue-500 text-white rounded">新增品項</button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-4 overflow-x-auto">
+            <h2 class="text-xl font-bold mb-4">訂單統計表 (今日)</h2>
+            <table class="w-full border-collapse border text-sm" id="statTable">
+                <thead>
+                    <tr class="bg-gray-200">
+                        <th class="border p-1">品項</th>
+                        <th class="border p-1">價格</th>
+                        <th class="border p-1 text-blue-600">數量</th>
+                    </tr>
+                </thead>
+                <tbody id="statBody">
+                    </tbody>
+            </table>
+        </div>
+    </section>
+
+    <script>
+        // 初始預設資料 (對應你的圖片)
+        let menuData = [
+            { category: "正常三菜", name: "炸滷排", price: 14 },
+            { category: "正常三菜", name: "雞腿排", price: 14 },
+            { category: "特餐", name: "炒飯", price: 14 },
+            { category: "圓盒", name: "魯肉飯", price: 9 }
+        ];
+
+        let orders = [];
+
+        // 初始化渲染菜單
+        function renderMenu() {
+            const container = document.getElementById('menuContainer');
+            container.innerHTML = '';
+            
+            const categories = [...new Set(menuData.map(item => item.category))];
+            
+            categories.forEach(cat => {
+                let html = `<div class="bg-white rounded-lg shadow p-4">
+                    <h3 class="font-bold text-blue-800 mb-2 border-l-4 border-blue-800 pl-2">${cat}</h3>`;
+                
+                menuData.filter(i => i.category === cat).forEach(item => {
+                    html += `
+                    <div class="flex justify-between items-center py-2 border-b last:border-0">
+                        <div>
+                            <span class="font-medium">${item.name}</span>
+                            <span class="text-gray-500 ml-2">$${item.price}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="changeQty('${item.name}', -1)" class="w-8 h-8 bg-gray-200 rounded">-</button>
+                            <span id="qty-${item.name}" class="w-6 text-center font-bold">0</span>
+                            <button onclick="changeQty('${item.name}', 1)" class="w-8 h-8 bg-gray-200 rounded">+</button>
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+                container.innerHTML += html;
+            });
+        }
+
+        // 點餐數量邏輯
+        let currentCart = {};
+        function changeQty(name, delta) {
+            currentCart[name] = (currentCart[name] || 0) + delta;
+            if (currentCart[name] < 0) currentCart[name] = 0;
+            document.getElementById(`qty-${name}`).innerText = currentCart[name];
+            calculateTotal();
+        }
+
+        function calculateTotal() {
+            let total = 0;
+            menuData.forEach(item => {
+                total += (currentCart[item.name] || 0) * item.price;
+            });
+            document.getElementById('totalAmount').innerText = total;
+        }
+
+        // 提交訂單
+        async function submitOrder() {
+    const name = document.getElementById('custName').value;
+    const phone = document.getElementById('custPhone').value;
+    const type = document.getElementById('deliveryType').value;
+    const note = document.getElementById('custNote').value;
+    const total = document.getElementById('totalAmount').innerText;
+    
+    if(!name || !phone) return alert('請填寫姓名與電話');
+    if(total == "0") return alert('請至少選擇一項產品');
+
+    const submitBtn = event.target;
+    submitBtn.disabled = true;
+    submitBtn.innerText = "處理中...";
+
+    const data = {
+        name: name,
+        phone: phone,
+        type: type,
+        note: note,
+        items: currentCart,
+        total: total
+    };
+
+    // --- 請在下方填入你的 Google Apps Script 網址 ---
+    const scriptURL = https://script.google.com/macros/s/AKfycbxeDe71Uj5301KOxtp8su9R5jFX3M7Lf3pubIGocIR_9-eBbfm0d4kbfSaUOsszLg1d1Q/exec'你的_GAS_網頁應用程式網址';
+
+    try {
+        await fetch(scriptURL, {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+        
+        alert(`訂單送出成功！\n總金額：$${total}\n我們會盡快為您處理。`);
+        location.reload(); // 成功後重新整理
+    } catch (error) {
+        alert('系統繁忙，請稍後再試或直接撥打電話。');
+        submitBtn.disabled = false;
+        submitBtn.innerText = "確認送出訂單";
+    }
+}
+
+        // 後台功能：新增品項
+        function addItem() {
+            const cat = document.getElementById('newCategory').value;
+            const name = document.getElementById('newItemName').value;
+            const price = parseInt(document.getElementById('newItemPrice').value);
+            
+            if(cat && name && price) {
+                menuData.push({category: cat, name: name, price: price});
+                renderMenu();
+                updateStats();
+                alert('品項已新增');
+            }
+        }
+
+        // 後台功能：統計表格 (模仿圖片樣式)
+        function updateStats() {
+            const tbody = document.getElementById('statBody');
+            tbody.innerHTML = '';
+            
+            menuData.forEach(item => {
+                let count = 0;
+                orders.forEach(order => {
+                    count += (order.items[item.name] || 0);
+                });
+
+                const row = `<tr>
+                    <td class="border p-1">${item.name}</td>
+                    <td class="border p-1 text-center">${item.price}</td>
+                    <td class="border p-1 text-center font-bold text-blue-600 bg-blue-50">${count}</td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // 切換視圖
+        function toggleView() {
+            const cv = document.getElementById('customerView');
+            const av = document.getElementById('adminView');
+            const btn = document.getElementById('viewToggleBtn');
+            
+            if (cv.classList.contains('hidden-section')) {
+                cv.classList.remove('hidden-section');
+                av.classList.add('hidden-section');
+                btn.innerText = "進入後台";
+            } else {
+                cv.classList.add('hidden-section');
+                av.classList.remove('hidden-section');
+                btn.innerText = "回訂餐頁";
+                updateStats();
+            }
+        }
+
+        // 初始啟動
+        renderMenu();
+    </script>
+</body>
+</html>
